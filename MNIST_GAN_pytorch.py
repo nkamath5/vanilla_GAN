@@ -116,7 +116,7 @@ def plot_result(generator, noise, num_epoch, save=False, save_dir='MNIST_GAN_res
     fig, axes = plt.subplots(n_rows, n_cols, figsize=fig_size)
     for ax, img in zip(axes.flatten(), gen_image):
         ax.axis('off')
-        ax.set_adjustable('box-forced')
+        ax.set_adjustable('box')
         ax.imshow(img.cpu().data.view(image_size, image_size).numpy(), cmap='gray', aspect='equal')
     plt.subplots_adjust(wspace=0, hspace=0)
     title = 'Epoch {0}'.format(num_epoch+1)
@@ -213,11 +213,11 @@ def train_GAN(G, D, criterion, G_optimizer, D_optimizer, data_loader, save_dir):
             G_optimizer.step()
     
             # loss values
-            D_losses.append(D_loss.data[0])
-            G_losses.append(G_loss.data[0])
+            D_losses.append(D_loss.item())
+            G_losses.append(G_loss.item())
     
             print('Epoch [%d/%d], Step [%d/%d], D_loss: %.4f, G_loss: %.4f'
-                  % (epoch+1, num_epochs, i+1, len(data_loader), D_loss.data[0], G_loss.data[0]))
+                  % (epoch+1, num_epochs, i+1, len(data_loader), D_loss.item(), G_loss.item()))
     
         D_avg_loss = torch.mean(torch.FloatTensor(D_losses))
         G_avg_loss = torch.mean(torch.FloatTensor(G_losses))
@@ -263,7 +263,7 @@ if __name__ == "__main__":
     
     # MNIST dataset
     transform = transforms.Compose([transforms.ToTensor(),
-                                    transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))])
+                                    transforms.Normalize(mean=(0.5,), std=(0.5,))])
     
     mnist_data = dsets.MNIST(root=data_dir,
                              train=True,
