@@ -8,33 +8,6 @@ import matplotlib.pyplot as plt
 import os
 import imageio
 
-# Parameters
-image_size = 28
-G_input_dim = 100
-G_output_dim = image_size*image_size
-D_input_dim = image_size*image_size
-D_output_dim = 1
-hidden_dims = [256, 512, 1024]
-
-learning_rate = 0.0002
-batch_size = 128
-num_epochs = 100
-data_dir = '../Data/MNIST_data/'
-save_dir = 'MNIST_GAN_results/'
-
-# MNIST dataset
-transform = transforms.Compose([transforms.ToTensor(),
-                                transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))])
-
-mnist_data = dsets.MNIST(root=data_dir,
-                         train=True,
-                         transform=transform,
-                         download=True)
-
-data_loader = torch.utils.data.DataLoader(dataset=mnist_data,
-                                          batch_size=batch_size,
-                                          shuffle=True)
-
 
 # De-normalization
 def denorm(x):
@@ -162,105 +135,145 @@ def plot_result(generator, noise, num_epoch, save=False, save_dir='MNIST_GAN_res
         plt.close()
 
 
-# Models
-G = Generator(G_input_dim, hidden_dims, G_output_dim)
-D = Discriminator(D_input_dim, hidden_dims[::-1], D_output_dim)
-G.cuda()
-D.cuda()
+def setup_networks(G_input_dim, G_output_dim, D_input_dim, D_output_dim, hidden_dims):
+    # Models
+    G = Generator(G_input_dim, hidden_dims, G_output_dim)
+    D = Discriminator(D_input_dim, hidden_dims[::-1], D_output_dim)
+    if torch.cuda.is_available():
+        G.cuda()
+        D.cuda()
+    return G, D
 
-# Loss function
-criterion = torch.nn.BCELoss()
+def setup_loss_optim():
+    # Loss function
+    criterion = torch.nn.BCELoss()
+    
+    # Optimizers
+    G_optimizer = torch.optim.Adam(G.parameters(), lr=learning_rate)
+    D_optimizer = torch.optim.Adam(D.parameters(), lr=learning_rate)
 
-# Optimizers
-G_optimizer = torch.optim.Adam(G.parameters(), lr=learning_rate)
-D_optimizer = torch.optim.Adam(D.parameters(), lr=learning_rate)
+    return criterion, G_optimizer, D_optimizer
 
-# Training GAN
-D_avg_losses = []
-G_avg_losses = []
+def train_GAN(G, D, criterion, G_optimizer, D_optimizer, data_loader, save_dir):
+    # Training GAN
+    D_avg_losses = []
+    G_avg_losses = []
+    
+    # Fixed noise for test
+    num_test_samples = 5*5
+    fixed_noise = torch.randn(num_test_samples, G_input_dim)
+    
+    for epoch in range(num_epochs):
+        D_losses = []
+        G_losses = []
+    
+        # minibatch training
+        for i, (images, _) in enumerate(data_loader):
+    
+            # image data
+            mini_batch = images.size()[0]
+            x_ = images.view(-1, D_input_dim)
+            x_ = Variable(x_.cuda())
+    
+            # labels
+            y_real_ = Variable(torch.ones(mini_batch, 1).cuda())
+            y_fake_ = Variable(torch.zeros(mini_batch, 1).cuda())
+    
+            # Train discriminator with real data
+            D_real_decision = D(x_)
+            # print(D_real_decision, y_real_)
+            D_real_loss = criterion(D_real_decision, y_real_)
+    
+            # Train discriminator with fake data
+            z_ = torch.randn(mini_batch, G_input_dim)
+            z_ = Variable(z_.cuda())
+            gen_image = G(z_)
+    
+            D_fake_decision = D(gen_image)
+            D_fake_loss = criterion(D_fake_decision, y_fake_)
+    
+            # Back propagation
+            D_loss = D_real_loss + D_fake_loss
+            D.zero_grad()
+            D_loss.backward()
+            D_optimizer.step()
+    
+            # Train generator
+            z_ = torch.randn(mini_batch, G_input_dim)
+            z_ = Variable(z_.cuda())
+            gen_image = G(z_)
+    
+            D_fake_decision = D(gen_image)
+            G_loss = criterion(D_fake_decision, y_real_)
+    
+            # Back propagation
+            D.zero_grad()
+            G.zero_grad()
+            G_loss.backward()
+            G_optimizer.step()
+    
+            # loss values
+            D_losses.append(D_loss.data[0])
+            G_losses.append(G_loss.data[0])
+    
+            print('Epoch [%d/%d], Step [%d/%d], D_loss: %.4f, G_loss: %.4f'
+                  % (epoch+1, num_epochs, i+1, len(data_loader), D_loss.data[0], G_loss.data[0]))
+    
+        D_avg_loss = torch.mean(torch.FloatTensor(D_losses))
+        G_avg_loss = torch.mean(torch.FloatTensor(G_losses))
+    
+        # avg loss values for plot
+        D_avg_losses.append(D_avg_loss)
+        G_avg_losses.append(G_avg_loss)
+    
+        plot_loss(D_avg_losses, G_avg_losses, epoch, save=True, save_dir=save_dir)
+    
+        # Show result for fixed noise
+        plot_result(G, fixed_noise, epoch, save=True, fig_size=(5, 5), save_dir=save_dir)
+    
+    # Make gif
+    loss_plots = []
+    gen_image_plots = []
+    for epoch in range(num_epochs):
+        # plot for generating gif
+        save_fn1 = save_dir + 'MNIST_GAN_losses_epoch_{:d}'.format(epoch + 1) + '.png'
+        loss_plots.append(imageio.imread(save_fn1))
+    
+        save_fn2 = save_dir + 'MNIST_GAN_epoch_{:d}'.format(epoch + 1) + '.png'
+        gen_image_plots.append(imageio.imread(save_fn2))
+    
+    imageio.mimsave(save_dir + 'MNIST_GAN_losses_epochs_{:d}'.format(num_epochs) + '.gif', loss_plots, fps=5)
+    imageio.mimsave(save_dir + 'MNIST_GAN_epochs_{:d}'.format(num_epochs) + '.gif', gen_image_plots, fps=5)
 
-# Fixed noise for test
-num_test_samples = 5*5
-fixed_noise = torch.randn(num_test_samples, G_input_dim)
 
-for epoch in range(num_epochs):
-    D_losses = []
-    G_losses = []
-
-    # minibatch training
-    for i, (images, _) in enumerate(data_loader):
-
-        # image data
-        mini_batch = images.size()[0]
-        x_ = images.view(-1, D_input_dim)
-        x_ = Variable(x_.cuda())
-
-        # labels
-        y_real_ = Variable(torch.ones(mini_batch, 1).cuda())
-        y_fake_ = Variable(torch.zeros(mini_batch, 1).cuda())
-
-        # Train discriminator with real data
-        D_real_decision = D(x_)
-        # print(D_real_decision, y_real_)
-        D_real_loss = criterion(D_real_decision, y_real_)
-
-        # Train discriminator with fake data
-        z_ = torch.randn(mini_batch, G_input_dim)
-        z_ = Variable(z_.cuda())
-        gen_image = G(z_)
-
-        D_fake_decision = D(gen_image)
-        D_fake_loss = criterion(D_fake_decision, y_fake_)
-
-        # Back propagation
-        D_loss = D_real_loss + D_fake_loss
-        D.zero_grad()
-        D_loss.backward()
-        D_optimizer.step()
-
-        # Train generator
-        z_ = torch.randn(mini_batch, G_input_dim)
-        z_ = Variable(z_.cuda())
-        gen_image = G(z_)
-
-        D_fake_decision = D(gen_image)
-        G_loss = criterion(D_fake_decision, y_real_)
-
-        # Back propagation
-        D.zero_grad()
-        G.zero_grad()
-        G_loss.backward()
-        G_optimizer.step()
-
-        # loss values
-        D_losses.append(D_loss.data[0])
-        G_losses.append(G_loss.data[0])
-
-        print('Epoch [%d/%d], Step [%d/%d], D_loss: %.4f, G_loss: %.4f'
-              % (epoch+1, num_epochs, i+1, len(data_loader), D_loss.data[0], G_loss.data[0]))
-
-    D_avg_loss = torch.mean(torch.FloatTensor(D_losses))
-    G_avg_loss = torch.mean(torch.FloatTensor(G_losses))
-
-    # avg loss values for plot
-    D_avg_losses.append(D_avg_loss)
-    G_avg_losses.append(G_avg_loss)
-
-    plot_loss(D_avg_losses, G_avg_losses, epoch, save=True)
-
-    # Show result for fixed noise
-    plot_result(G, fixed_noise, epoch, save=True, fig_size=(5, 5))
-
-# Make gif
-loss_plots = []
-gen_image_plots = []
-for epoch in range(num_epochs):
-    # plot for generating gif
-    save_fn1 = save_dir + 'MNIST_GAN_losses_epoch_{:d}'.format(epoch + 1) + '.png'
-    loss_plots.append(imageio.imread(save_fn1))
-
-    save_fn2 = save_dir + 'MNIST_GAN_epoch_{:d}'.format(epoch + 1) + '.png'
-    gen_image_plots.append(imageio.imread(save_fn2))
-
-imageio.mimsave(save_dir + 'MNIST_GAN_losses_epochs_{:d}'.format(num_epochs) + '.gif', loss_plots, fps=5)
-imageio.mimsave(save_dir + 'MNIST_GAN_epochs_{:d}'.format(num_epochs) + '.gif', gen_image_plots, fps=5)
+if __name__ == "__main__":
+    # Parameters
+    image_size = 28
+    G_input_dim = 100
+    G_output_dim = image_size*image_size
+    D_input_dim = image_size*image_size
+    D_output_dim = 1
+    hidden_dims = [256, 512, 1024]
+    
+    learning_rate = 0.0002
+    batch_size = 128
+    num_epochs = 100
+    data_dir = '../Data/MNIST_data/'
+    save_dir = 'MNIST_GAN_results/'
+    
+    # MNIST dataset
+    transform = transforms.Compose([transforms.ToTensor(),
+                                    transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))])
+    
+    mnist_data = dsets.MNIST(root=data_dir,
+                             train=True,
+                             transform=transform,
+                             download=True)
+    
+    data_loader = torch.utils.data.DataLoader(dataset=mnist_data,
+                                              batch_size=batch_size,
+                                              shuffle=True)
+    G, D = setup_networks(G_input_dim, G_output_dim, D_input_dim, D_output_dim, hidden_dims)
+    criterion, G_optimizer, D_optimizer = setup_loss_optim()
+    train_GAN(G, D, criterion, G_optimizer, D_optimizer, data_loader, save_dir)
+    
