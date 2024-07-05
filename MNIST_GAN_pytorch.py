@@ -48,7 +48,7 @@ def pick_elements_and_gradients(tensor, num_elements=15):
 
     return indices, selected_elements, selected_gradients
 
-def check_gradients(generator, discriminator, criterion, z_dim, batch_sizes, curr_kimg):
+def check_gradients(generator, discriminator, D_input_dim, criterion, z_dim, batch_sizes, curr_kimg, device=torch.device('cpu')):
     print(f"Checking gradients across various batches of various batch sizes for curr_kimg: {curr_kimg}")
 
     # MNIST dataset
@@ -70,15 +70,16 @@ def check_gradients(generator, discriminator, criterion, z_dim, batch_sizes, cur
         discriminator_gradient_dict[curr_kimg] = {}
     for batch_size in batch_sizes:
 
+        print(f"Computing grads for batch size: {batch_size}")
         data_loader_for_grads = torch.utils.data.DataLoader(dataset=mnist_data,
                                               batch_size=batch_size,
-                                              shuffle=True)
+                                              shuffle=True, drop_last=True)
         data_iter = iter(data_loader_for_grads)
 
         for itr in range(500):
             
             # generate fakes and run them thru D
-            z = torch.randn(batch_size, z_dim, device=generator.device)
+            z = torch.randn(batch_size, z_dim, device=device)
             fakes = generator(z)
             D_fake_decision = discriminator(fakes)
 
@@ -88,7 +89,7 @@ def check_gradients(generator, discriminator, criterion, z_dim, batch_sizes, cur
             
             # loss.backward on G & save grads
             G_loss = criterion(D_fake_decision, torch.ones_like(D_fake_decision))
-            G_loss.backward()
+            G_loss.backward(retain_graph=True) # to prevent freeing up of intermediate tensors needed for D_fake_Loss.backward()
 
             picked = {}
             for name, param in generator.named_parameters():
@@ -116,8 +117,8 @@ def check_gradients(generator, discriminator, criterion, z_dim, batch_sizes, cur
             except StopIteration:
               # if we run out of data, reinit the iterator
               data_iter = iter(data_loader_for_grads)
-              real_imgs = next(data_iter)
-            D_real_decision = discriminator(real_imgs)
+              real_imgs, _ = next(data_iter)
+            D_real_decision = discriminator(real_imgs.view(-1, D_input_dim).to(device))
             D_real_loss = criterion(D_real_decision, torch.ones_like(D_fake_decision))
             D_real_loss.backward()
 
@@ -134,6 +135,9 @@ def check_gradients(generator, discriminator, criterion, z_dim, batch_sizes, cur
             else:
                 for layer_name in picked.keys():
                     discriminator_gradient_dict[curr_kimg][batch_size][layer_name][f'grads_itr_{itr}'] = picked[layer_name][f'grads_itr_{itr}']
+    
+    torch.save(generator_gradient_dict, 'generator_gradient_dict.pth')
+    torch.save(discriminator_gradient_dict, 'discriminator_gradient_dict.pth')
 
 
 # Generator model
@@ -223,10 +227,10 @@ def plot_loss(d_losses, g_losses, num_epoch, save=False, save_dir='MNIST_GAN_res
         plt.close()
 
 
-def plot_result(generator, noise, num_epoch, save=False, save_dir='MNIST_GAN_results/', show=False, fig_size=(5, 5)):
+def plot_result(generator, noise, num_epoch, save=False, save_dir='MNIST_GAN_results/', show=False, fig_size=(5, 5), device=torch.device('cpu')):
     generator.eval()
 
-    noise = Variable(noise.to(generator.device))
+    noise = Variable(noise.to(device))
     gen_image = generator(noise)
     gen_image = denorm(gen_image)
 
@@ -272,7 +276,7 @@ def setup_loss_optim():
 
     return criterion, G_optimizer, D_optimizer
 
-def train_GAN(G, D, criterion, G_optimizer, D_optimizer, data_loader, save_dir, device = torch.device('cpu'), check_grads=False, **check_grads_kwargs):
+def train_GAN(G, D, D_input_dim, criterion, G_optimizer, D_optimizer, data_loader, save_dir, device = torch.device('cpu'), check_grads=False, **check_grads_kwargs):
     kimg = 0.0
 
     # Training GAN
@@ -340,6 +344,10 @@ def train_GAN(G, D, criterion, G_optimizer, D_optimizer, data_loader, save_dir, 
     
             print('Epoch [%d/%d], Step [%d/%d], kimg [%.2f], D_loss: %.4f, G_loss: %.4f'
                   % (epoch+1, num_epochs, i+1, len(data_loader), kimg, D_loss.item(), G_loss.item()))
+
+            if check_grads and kimg > check_grads_kwargs['kimg_checkpoints'][0]:
+                check_grads_kwargs['kimg_checkpoints'] = check_grads_kwargs['kimg_checkpoints'][1:-1]
+                check_gradients(G, D, D_input_dim, criterion, G_input_dim, check_grads_kwargs['batch_sizes'], kimg, device)
     
         D_avg_loss = torch.mean(torch.FloatTensor(D_losses))
         G_avg_loss = torch.mean(torch.FloatTensor(G_losses))
@@ -351,7 +359,7 @@ def train_GAN(G, D, criterion, G_optimizer, D_optimizer, data_loader, save_dir, 
         plot_loss(D_avg_losses, G_avg_losses, epoch, save=True, save_dir=save_dir)
     
         # Show result for fixed noise
-        plot_result(G, fixed_noise, epoch, save=True, fig_size=(5, 5), save_dir=save_dir)
+        plot_result(G, fixed_noise, epoch, save=True, fig_size=(5, 5), save_dir=save_dir, device=device)
     
     # Make gif
     loss_plots = []
@@ -366,9 +374,6 @@ def train_GAN(G, D, criterion, G_optimizer, D_optimizer, data_loader, save_dir, 
     
     imageio.mimsave(save_dir + 'MNIST_GAN_losses_epochs_{:d}'.format(num_epochs) + '.gif', loss_plots, fps=5)
     imageio.mimsave(save_dir + 'MNIST_GAN_epochs_{:d}'.format(num_epochs) + '.gif', gen_image_plots, fps=5)
-
-    if check_grads and kimg in check_grads_kwargs['kimg_checkpoints']:
-        check_gradients(G, D, criterion, G_input_dim, check_grads_kwargs['batch_sizes'], kimg)
 
 
 if __name__ == "__main__":
@@ -401,5 +406,5 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     G, D = setup_networks(G_input_dim, G_output_dim, D_input_dim, D_output_dim, hidden_dims, device)
     criterion, G_optimizer, D_optimizer = setup_loss_optim()
-    train_GAN(G, D, criterion, G_optimizer, D_optimizer, data_loader, save_dir, check_grads=True, kimg_checkpoints=[0, 50, 500, 5000, 50000], batch_sizes=[32*2, 32*10, 32*50, 32*100, 32*1000])
+    train_GAN(G, D, D_input_dim, criterion, G_optimizer, D_optimizer, data_loader, save_dir, check_grads=True, kimg_checkpoints=[0, 50, 500, 5000, 50000], batch_sizes=[32*2, 32*10, 32*50, 32*100, 32*1000])
     
