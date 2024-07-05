@@ -406,5 +406,5 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     G, D = setup_networks(G_input_dim, G_output_dim, D_input_dim, D_output_dim, hidden_dims, device)
     criterion, G_optimizer, D_optimizer = setup_loss_optim()
-    train_GAN(G, D, D_input_dim, criterion, G_optimizer, D_optimizer, data_loader, save_dir, check_grads=True, kimg_checkpoints=[0, 50, 500, 5000, 50000], batch_sizes=[32*2, 32*10, 32*50, 32*100, 32*1000])
+    train_GAN(G, D, D_input_dim, criterion, G_optimizer, D_optimizer, data_loader, save_dir, device=device, check_grads=True, kimg_checkpoints=[0, 50, 500, 5000, 50000], batch_sizes=[32*2, 32*10, 32*50, 32*100, 32*1000])
     
