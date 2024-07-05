@@ -76,7 +76,7 @@ def check_gradients(generator, discriminator, D_input_dim, criterion, z_dim, bat
                                               shuffle=True, drop_last=True)
         data_iter = iter(data_loader_for_grads)
 
-        for itr in range(500):
+        for itr in range(200):
             
             # generate fakes and run them thru D
             z = torch.randn(batch_size, z_dim, device=device)
@@ -346,7 +346,7 @@ def train_GAN(G, D, D_input_dim, criterion, G_optimizer, D_optimizer, data_loade
                   % (epoch+1, num_epochs, i+1, len(data_loader), kimg, D_loss.item(), G_loss.item()))
 
             if check_grads and kimg > check_grads_kwargs['kimg_checkpoints'][0]:
-                check_grads_kwargs['kimg_checkpoints'] = check_grads_kwargs['kimg_checkpoints'][1:-1]
+                check_grads_kwargs['kimg_checkpoints'] = check_grads_kwargs['kimg_checkpoints'][1:-1] if len(check_grads_kwargs['kimg_checkpoints'])>1 else []
                 check_gradients(G, D, D_input_dim, criterion, G_input_dim, check_grads_kwargs['batch_sizes'], kimg, device)
     
         D_avg_loss = torch.mean(torch.FloatTensor(D_losses))
@@ -406,5 +406,5 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     G, D = setup_networks(G_input_dim, G_output_dim, D_input_dim, D_output_dim, hidden_dims, device)
     criterion, G_optimizer, D_optimizer = setup_loss_optim()
-    train_GAN(G, D, D_input_dim, criterion, G_optimizer, D_optimizer, data_loader, save_dir, device=device, check_grads=True, kimg_checkpoints=[0, 50, 500, 5000, 50000], batch_sizes=[32*2, 32*10, 32*50, 32*100, 32*1000])
+    train_GAN(G, D, D_input_dim, criterion, G_optimizer, D_optimizer, data_loader, save_dir, device=device, check_grads=True, kimg_checkpoints=[0, 50, 500, 5000, 50000], batch_sizes=[32*2, 32*10, 32*50, 32*250])
     
