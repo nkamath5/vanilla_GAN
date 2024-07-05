@@ -346,7 +346,7 @@ def train_GAN(G, D, D_input_dim, criterion, G_optimizer, D_optimizer, data_loade
                   % (epoch+1, num_epochs, i+1, len(data_loader), kimg, D_loss.item(), G_loss.item()))
 
             if check_grads and kimg > check_grads_kwargs['kimg_checkpoints'][0]:
-                check_grads_kwargs['kimg_checkpoints'], check_grads = check_grads_kwargs['kimg_checkpoints'][1:], True if len(check_grads_kwargs['kimg_checkpoints'])>1 else [], False
+                check_grads_kwargs['kimg_checkpoints'], check_grads = (check_grads_kwargs['kimg_checkpoints'][1:], True) if len(check_grads_kwargs['kimg_checkpoints'])>1 else ([], False)
                 check_gradients(G, D, D_input_dim, criterion, G_input_dim, check_grads_kwargs['batch_sizes'], kimg, device)
     
         D_avg_loss = torch.mean(torch.FloatTensor(D_losses))
