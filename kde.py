@@ -18,7 +18,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from pytorch_generative.models import base
+import base
 
 
 class Kernel(abc.ABC, nn.Module):
