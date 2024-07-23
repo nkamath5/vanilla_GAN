@@ -34,7 +34,7 @@ def get_log_prob(vectors):
     return log_prob_estimator
 
 def get_real_distribution(train_dataset, batch_size=64):
-    data_loader = DataLoader(train_dataset, batch_size, shuffle=True)
+    data_loader = torch.utils.data.DataLoader(train_dataset, batch_size, shuffle=True)
     real_std_dev_list = []
     for real, _ in tqdm(data_loader):
       real = real.view(-1, 28*28).to(device)
