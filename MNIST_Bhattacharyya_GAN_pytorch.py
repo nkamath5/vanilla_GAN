@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import imageio
+from tqdm import tqdm
 
 
 generator_gradient_dict = {}
