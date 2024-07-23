@@ -18,7 +18,7 @@ import numpy as np
 import torch
 from torch import nn
 
-import base
+from vanilla_GAN import base
 
 
 class Kernel(abc.ABC, nn.Module):
