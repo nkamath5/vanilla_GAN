@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import os
 import imageio
 from tqdm import tqdm
-from . import kde
+import kde
 
 
 generator_gradient_dict = {}
@@ -401,7 +401,7 @@ def train_GAN(G, D, D_input_dim, criterion, G_optimizer, D_optimizer, data_loade
             # Back propagation
             D.zero_grad()
             G.zero_grad()
-            G_vanilla_loss.backward()
+            G_vanilla_loss.backward(retain_graph=True)
             Bhatt_loss.backward()
             G_optimizer.step()
     
@@ -460,8 +460,8 @@ if __name__ == "__main__":
     learning_rate = 0.0002
     batch_size = 128
     num_epochs = 100
-    data_dir = '../Data/MNIST_data/'
-    save_dir = 'MNIST_GAN_results/'
+    data_dir = './content/drive/MyDrive/stats-aware-gans/Vanilla-bhatt-GAN-toy-expt/Data/MNIST_data/'
+    save_dir = '/content/drive/MyDrive/stats-aware-gans/Vanilla-bhatt-GAN-toy-expt/MNIST_GAN_results/'
     
     # MNIST dataset
     transform = transforms.Compose([transforms.ToTensor(),
