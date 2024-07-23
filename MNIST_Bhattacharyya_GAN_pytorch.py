@@ -198,8 +198,8 @@ def check_gradients(generator, discriminator, D_input_dim, criterion, z_dim, bat
                 for layer_name in picked.keys():
                     discriminator_gradient_dict[curr_kimg][batch_size][layer_name][f'grads_itr_{itr}'] = picked[layer_name][f'grads_itr_{itr}']
     
-    torch.save(generator_gradient_dict, 'generator_gradient_dict.pth')
-    torch.save(discriminator_gradient_dict, 'discriminator_gradient_dict.pth')
+    torch.save(generator_gradient_dict, '/content/drive/MyDrive/stats-aware-gans/Vanilla-bhatt-GAN-toy-expt/generator_gradient_dict.pth')
+    torch.save(discriminator_gradient_dict, '/content/drive/MyDrive/stats-aware-gans/Vanilla-bhatt-GAN-toy-expt/discriminator_gradient_dict.pth')
 
 
 # Generator model
@@ -460,7 +460,7 @@ if __name__ == "__main__":
     learning_rate = 0.0002
     batch_size = 128
     num_epochs = 100
-    data_dir = './content/drive/MyDrive/stats-aware-gans/Vanilla-bhatt-GAN-toy-expt/Data/MNIST_data/'
+    data_dir = '/content/drive/MyDrive/stats-aware-gans/Vanilla-bhatt-GAN-toy-expt/Data/MNIST_data/'
     save_dir = '/content/drive/MyDrive/stats-aware-gans/Vanilla-bhatt-GAN-toy-expt/MNIST_GAN_results/'
     
     # MNIST dataset
